@@ -24,6 +24,8 @@ _gn_args=(
   fatal_linker_warnings=false
   clang_use_chrome_plugins=false
   enable_precompiled_headers=false
+  use_unified_system_module=false
+  use_clang_modules=false
   # ungoogled-chromium flags.gn (154.0.8037.97-1), as the CEF-era build had them.
   # Not used: safe_browsing_mode=0, enable_mdns/enable_service_discovery/enable_reporting=false
   # (kept as in the CEF-era build; domain substitution already cuts their Google endpoints).

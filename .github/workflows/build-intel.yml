@@ -96,11 +96,15 @@ jobs:
 
       - name: Configure GN for Intel (x64)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}
-        run: bash engine/patches/build/02-gn-args.sh
+        run: |
+          cp engine/patches/build/* "$HOME/chromium-build/scripts/"
+          bash engine/patches/build/02-gn-args.sh
 
       - name: Compile Chromium Framework for Intel (x64)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}
-        run: bash engine/patches/build/05-build.sh
+        run: |
+          cp engine/patches/build/* "$HOME/chromium-build/scripts/"
+          bash engine/patches/build/05-build.sh
 
       - name: Package Chromium Framework artifact
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}
