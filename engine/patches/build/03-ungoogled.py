@@ -139,6 +139,7 @@ if not dry:
             f.write_text(s.replace(old, new, 1))
 
 if not dry:
+    REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text('patch\tstatus\tdetail\n' + ''.join('\t'.join(r) + '\n' for r in rows))
 for r in rows:
     if r[1] != 'applied':

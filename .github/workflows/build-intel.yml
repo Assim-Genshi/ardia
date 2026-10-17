@@ -65,7 +65,7 @@ jobs:
       - name: Install depot_tools
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}
         run: |
-          mkdir -p "$HOME/chromium-build"
+          mkdir -p "$HOME/chromium-build/logs" "$HOME/chromium-build/scripts"
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git "$HOME/chromium-build/depot_tools"
           echo "$HOME/chromium-build/depot_tools" >> $GITHUB_PATH
 
@@ -79,16 +79,17 @@ jobs:
       - name: Apply ungoogled-chromium patches and domain substitution
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}
         run: |
-          git clone -b 154.0.8037.97-1 --depth 1 https://github.com/ungoogled-software/ungoogled-chromium.git "$HOME/chromium-build/ungoogled"
-          git clone -b 154.0.8037.97-1.1 --depth 1 https://github.com/ungoogled-software/ungoogled-chromium-macos.git "$HOME/chromium-build/ungoogled-macos"
+          mkdir -p "$HOME/chromium-build/logs"
+          git clone https://github.com/ungoogled-software/ungoogled-chromium.git "$HOME/chromium-build/ungoogled"
+          git -C "$HOME/chromium-build/ungoogled" checkout 154.0.8037.97-1
+          git clone https://github.com/ungoogled-software/ungoogled-chromium-macos.git "$HOME/chromium-build/ungoogled-macos"
+          git -C "$HOME/chromium-build/ungoogled-macos" checkout 154.0.8037.97-1.1
           python3 engine/patches/build/03-ungoogled.py
           bash engine/patches/build/04-domain-substitution.sh
 
-      - name: Apply Ardia patches and engine layers
+      - name: Apply Ardia engine layers
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}
         run: |
-          python3 engine/patches/series.py capture-base --phase chromium
-          python3 engine/patches/series.py apply --phase chromium
           bash engine/chromium/apply.sh
           bash engine/ardiacore/apply.sh
 
