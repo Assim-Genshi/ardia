@@ -14,6 +14,7 @@ solutions = [{'managed': False, 'name': 'src',
   'custom_vars': {'checkout_pgo_profiles': False, 'source_tarball': False, 'siso_version': 'latest'},
   'custom_deps': {}, 'deps_file': 'DEPS', 'safesync_url': ''}]
 target_os = ['mac']
+target_cpu = ['$TARGET_CPU']
 GCLIENT
 lowprio_net gclient sync --no-history --nohooks -j 16
 lowprio_net gclient runhooks

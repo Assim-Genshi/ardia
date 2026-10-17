@@ -1,0 +1,178 @@
+name: Build Intel macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_engine:
+        description: 'Build Chromium engine from source'
+        type: boolean
+        default: true
+      build_app:
+        description: 'Build Ardia application'
+        type: boolean
+        default: true
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-intel:
+    runs-on: macos-15
+    timeout-minutes: 360
+    env:
+      TARGET_CPU: x64
+      DEPOT_TOOLS_UPDATE: 0
+      DEPOT_TOOLS_METRICS: 0
+      CI: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Maximize available runner disk space
+        run: |
+          sudo rm -rf /Applications/Xcode_15*.app /Applications/Xcode_14*.app 2>/dev/null || true
+          sudo rm -rf /usr/local/share/dotnet 2>/dev/null || true
+          sudo rm -rf /usr/local/lib/android 2>/dev/null || true
+          sudo rm -rf "$ANDROID_SDK_ROOT" 2>/dev/null || true
+          df -h
+
+      - name: Select Xcode 16
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.app || sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install depot_tools
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}
+        run: |
+          mkdir -p "$HOME/chromium-build"
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git "$HOME/chromium-build/depot_tools"
+          echo "$HOME/chromium-build/depot_tools" >> $GITHUB_PATH
+
+      - name: Sync Chromium for Intel macOS (x64)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}
+        run: |
+          mkdir -p "$HOME/chromium-build/scripts"
+          cp engine/patches/build/* "$HOME/chromium-build/scripts/"
+          bash engine/patches/build/01-sync.sh
+
+      - name: Apply ungoogled-chromium patches and domain substitution
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}
+        run: |
+          git clone -b 154.0.8037.97-1 --depth 1 https://github.com/ungoogled-software/ungoogled-chromium.git "$HOME/chromium-build/ungoogled"
+          git clone -b 154.0.8037.97-1.1 --depth 1 https://github.com/ungoogled-software/ungoogled-chromium-macos.git "$HOME/chromium-build/ungoogled-macos"
+          python3 engine/patches/build/03-ungoogled.py
+          bash engine/patches/build/04-domain-substitution.sh
+
+      - name: Apply Ardia patches and engine layers
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}
+        run: |
+          python3 engine/patches/series.py capture-base --phase chromium
+          python3 engine/patches/series.py apply --phase chromium
+          bash engine/chromium/apply.sh
+          bash engine/ardiacore/apply.sh
+
+      - name: Configure GN for Intel (x64)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}
+        run: bash engine/patches/build/02-gn-args.sh
+
+      - name: Compile Chromium Framework for Intel (x64)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}
+        run: bash engine/patches/build/05-build.sh
+
+      - name: Package Chromium Framework artifact
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}
+        run: |
+          framework_dir="$HOME/chromium-build/chromium_git/chromium/src/out/Release_GN_x64"
+          tar -cJf "$GITHUB_WORKSPACE/Chromium-Framework-x64.tar.xz" -C "$framework_dir" "Chromium Framework.framework"
+
+      - name: Upload Chromium Framework artifact
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-framework-x64
+          path: Chromium-Framework-x64.tar.xz
+          if-no-files-found: error
+
+      - name: Setup uBlock Origin
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_app }}
+        run: bash packages/ardiacore/scripts/ubo.sh
+
+      - name: Install CocoaPods dependencies
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_app }}
+        run: |
+          cd apps/browser/macos
+          LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pod install
+
+      - name: Stage ArdiaCore Framework
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_app }}
+        run: |
+          export ARDIACORE_FRAMEWORK="$HOME/chromium-build/chromium_git/chromium/src/out/Release_GN_x64/Chromium Framework.framework"
+          export ARDIACORE_STAGE_DIR="$GITHUB_WORKSPACE/apps/browser/build-release/ArdiaCoreFramework"
+          bash packages/ardiacore/scripts/stage-framework.sh
+
+      - name: Build Ardia Browser for Intel (x86_64)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_app }}
+        run: |
+          cd apps/browser
+          xcodebuild -workspace macos/Ardia.xcworkspace \
+            -scheme Ardia-macOS \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            ARCHS=x86_64 \
+            ONLY_ACTIVE_ARCH=NO \
+            ARDIACORE_STAGE_DIR="$PWD/build-release/ArdiaCoreFramework" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=YES \
+            -derivedDataPath "$PWD/build-release" \
+            build
+
+      - name: Verify Intel binary architecture
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_app }}
+        run: |
+          app_bin="apps/browser/build-release/Build/Products/Release/Ardia.app/Contents/MacOS/Ardia"
+          file "$app_bin"
+          lipo -info "$app_bin" | grep -q "x86_64"
+
+      - name: Package Intel application (Zip and DMG)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_app }}
+        run: |
+          app="apps/browser/build-release/Build/Products/Release/Ardia.app"
+          codesign --force --deep --sign - "$app"
+          ditto -c -k --keepParent "$app" "$GITHUB_WORKSPACE/Ardia-Intel-x86_64.zip"
+          mkdir -p "$RUNNER_TEMP/dmg-staging"
+          ditto "$app" "$RUNNER_TEMP/dmg-staging/Ardia.app"
+          ln -s /Applications "$RUNNER_TEMP/dmg-staging/Applications"
+          hdiutil create -volname Ardia -srcfolder "$RUNNER_TEMP/dmg-staging" -ov -format UDZO "$GITHUB_WORKSPACE/Ardia-Intel-x86_64.dmg"
+          rm -rf "$RUNNER_TEMP/dmg-staging"
+
+      - name: Upload Intel Browser artifacts
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_app }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ardia-browser-intel-x86_64
+          path: |
+            Ardia-Intel-x86_64.dmg
+            Ardia-Intel-x86_64.zip
+          if-no-files-found: error

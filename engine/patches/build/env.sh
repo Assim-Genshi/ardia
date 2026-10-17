@@ -14,12 +14,18 @@ export PATH="$CB/depot_tools:$PATH"
 export CHROMIUM_VERSION=154.0.8037.97
 export UNGOOGLED_TAG=154.0.8037.97-1
 export UNGOOGLED_MACOS_TAG=154.0.8037.97-1.1
-export GN_OUT_CONFIGS=Release_GN_arm64
+export TARGET_CPU="${TARGET_CPU:-arm64}"
+export GN_OUT_CONFIGS="${GN_OUT_CONFIGS:-Release_GN_${TARGET_CPU}}"
 # Low priority for everything heavy. CPU-bound steps (compile/link) run in the
 # background QoS band (-b): on this M5 Pro that confines them to the 10
 # lower-tier cores and throttles their disk I/O. Background QoS also throttles
 # network traffic to a crawl, so network-bound steps (sync) use the utility
 # clamp with throttled disk I/O instead.
-lowprio() { taskpolicy -b nice -n 19 "$@"; }
-lowprio_net() { taskpolicy -c utility -d throttle nice -n 19 "$@"; }
+if [[ "${CI:-}" == "true" ]]; then
+  lowprio() { "$@"; }
+  lowprio_net() { "$@"; }
+else
+  lowprio() { taskpolicy -b nice -n 19 "$@"; }
+  lowprio_net() { taskpolicy -c utility -d throttle nice -n 19 "$@"; }
+fi
 export DEPOT_TOOLS_METRICS=0
