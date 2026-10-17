@@ -3,10 +3,18 @@
 export CB=~/chromium-build
 # The Ardia checkout (game-resource.sh reads the offline game from it): the one this file is in, or
 # ~/Documents/ardia for the copy in ~/chromium-build/scripts that the step scripts source.
-_ac_repo="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../../.." && pwd)"
-[[ -f "$_ac_repo/engine/patches/series" ]] || _ac_repo="$HOME/Documents/ardia"
-export AC_REPO="${AC_REPO:-$_ac_repo}"
-unset _ac_repo
+if [[ -z "${AC_REPO:-}" ]]; then
+  _ac_repo="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../../.." && pwd)"
+  if [[ ! -f "$_ac_repo/engine/patches/series" ]]; then
+    if [[ -n "${GITHUB_WORKSPACE:-}" && -f "$GITHUB_WORKSPACE/engine/patches/series" ]]; then
+      _ac_repo="$GITHUB_WORKSPACE"
+    else
+      _ac_repo="$HOME/Documents/ardia"
+    fi
+  fi
+  export AC_REPO="$_ac_repo"
+  unset _ac_repo
+fi
 export DEPOT_TOOLS_UPDATE=0
 export PATH="$CB/depot_tools:$PATH"
 # The Chromium tag step 1 checks out, and the ungoogled-chromium tags made for exactly it

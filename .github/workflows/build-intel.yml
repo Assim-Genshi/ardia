@@ -24,6 +24,7 @@ jobs:
       DEPOT_TOOLS_UPDATE: 0
       DEPOT_TOOLS_METRICS: 0
       CI: true
+      AC_REPO: ${{ github.workspace }}
 
     steps:
       - name: Checkout repository
