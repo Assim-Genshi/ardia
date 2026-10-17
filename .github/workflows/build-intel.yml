@@ -21,7 +21,6 @@ jobs:
     timeout-minutes: 360
     env:
       TARGET_CPU: x64
-      DEPOT_TOOLS_UPDATE: 0
       DEPOT_TOOLS_METRICS: 0
       CI: true
       AC_REPO: ${{ github.workspace }}
@@ -69,6 +68,7 @@ jobs:
           mkdir -p "$HOME/chromium-build/logs" "$HOME/chromium-build/scripts"
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git "$HOME/chromium-build/depot_tools"
           echo "$HOME/chromium-build/depot_tools" >> $GITHUB_PATH
+          DEPOT_TOOLS_UPDATE=1 "$HOME/chromium-build/depot_tools/update_depot_tools"
 
       - name: Sync Chromium for Intel macOS (x64)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_engine }}

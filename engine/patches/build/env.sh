@@ -15,6 +15,9 @@ if [[ -z "${AC_REPO:-}" ]]; then
   export AC_REPO="$_ac_repo"
   unset _ac_repo
 fi
+if [[ -d "$CB/depot_tools" && ! -f "$CB/depot_tools/python3_bin_reldir.txt" ]]; then
+  DEPOT_TOOLS_UPDATE=1 "$CB/depot_tools/update_depot_tools" || true
+fi
 export DEPOT_TOOLS_UPDATE=0
 export PATH="$CB/depot_tools:$PATH"
 # The Chromium tag step 1 checks out, and the ungoogled-chromium tags made for exactly it
